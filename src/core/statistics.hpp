@@ -28,8 +28,8 @@
 
 #include "Observable_stat.hpp"
 #include "PartCfg.hpp"
-#include "Particle.hpp"
 #include "nonbonded_interactions/nonbonded_interaction_data.hpp"
+#include "particle_data.hpp"
 
 #include <map>
 #include <string>
@@ -88,8 +88,8 @@ void analyze_append(PartCfg &partCfg);
  *  Calculates the distance distribution of particles with types given
  *  in the @p p1_types list around particles with types given in the
  *  @p p2_types list. The distances range from @p r_min to @p r_max, binned
- *  into @p r_bins bins which are either equidistant (@p log_flag==false) or
- *  logarithmically equidistant (@p log_flag==true). The result is stored
+ *  into @p r_bins bins which are either equidistant (@p log_flag==0) or
+ *  logarithmically equidistant (@p log_flag==1). The result is stored
  *  in the @p array dist.
  *  @param p1_types list with types of particles to find the distribution for.
  *  @param n_p1     length of @p p1_types.
@@ -105,8 +105,8 @@ void analyze_append(PartCfg &partCfg);
  */
 void calc_part_distribution(PartCfg &, int const *p1_types, int n_p1,
                             int const *p2_types, int n_p2, double r_min,
-                            double r_max, int r_bins, bool log_flag,
-                            double *low, double *dist);
+                            double r_max, int r_bins, int log_flag, double *low,
+                            double *dist);
 
 /** Calculate the radial distribution function.
  *
@@ -184,6 +184,37 @@ std::vector<double> calc_structurefactor(PartCfg &, int const *p_types,
 
 std::vector<std::vector<double>> modify_stucturefactor(int order,
                                                        double const *sf);
+
+/** Calculate the spherically averaged structure factor.
+ *
+ *  Computes the structure factor along the [100] type directions
+ *
+ *  @param p_types   list with types of particles to be analyzed
+ *  @param n_types   length of @p p_types
+ *  @param order     the maximum wave vector length in 2PI/L
+ */
+std::vector<double> calc_structurefactor_fast(PartCfg &, int const *p_types,
+                                         int n_types, int order);
+
+std::vector<std::vector<double>> modify_stucturefactor_fast(int order,
+                                                       double const *sf);
+
+
+/** Calculate the spherically averaged structure factor.
+ *
+ *  Computes the structure factor for points satisfying r^2 = a^2 + b^2 + c^2
+ *
+ *  @param p_types   list with types of particles to be analyzed
+ *  @param n_types   length of @p p_types
+ *  @param order     the maximum wave vector length in 2PI/L
+ */
+std::vector<double> calc_structurefactor_uniform(PartCfg &, int const *p_types,
+                                         int n_types, int order);
+
+std::vector<std::vector<double>> modify_stucturefactor_uniform(int order,
+                                                       double const *sf);
+
+
 
 int calc_cylindrical_average(
     PartCfg &, std::vector<double> const &center,

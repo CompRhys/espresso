@@ -69,6 +69,10 @@ cdef extern from "statistics.hpp":
 
     cdef vector[double] calc_structurefactor(PartCfg & , int * p_types, int n_types, int order)
     cdef vector[vector[double]] modify_stucturefactor(int order, double * sf)
+    cdef vector[double] calc_structurefactor_fast(PartCfg & , int * p_types, int n_types, int order)
+    cdef vector[vector[double]] modify_stucturefactor_fast(int order, double * sf)
+    cdef vector[double] calc_structurefactor_uniform(PartCfg & , int * p_types, int n_types, int order)
+    cdef vector[vector[double]] modify_stucturefactor_uniform(int order, double * sf)
     cdef double mindist(PartCfg &, const List[int] & set1, const List[int] & set2)
     cdef double min_distance2(Vector3d pos1, Vector3d pos2)
     cdef List[int] nbhood(PartCfg &, const Vector3d & pos, double r_catch, const Vector3i & planedims)
@@ -99,7 +103,7 @@ cdef extern from "statistics.hpp":
 
     void calc_part_distribution(
         PartCfg & , int * p1_types, int n_p1, int * p2_types, int n_p2,
-        double r_min, double r_max, int r_bins, bint log_flag, double * low,
+        double r_min, double r_max, int r_bins, int log_flag, double * low,
         double * dist)
 
 cdef extern from "statistics_chain.hpp":

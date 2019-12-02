@@ -183,7 +183,7 @@ class Analysis:
             whether to include the particles contribution to the linear
             momentum.
         include_lbfluid : :obj:`bool`, optional
-            whether to include the lattice-Boltzmann fluid contribution
+            whether to include the Lattice Boltzmann fluid contribution
             to the linear momentum.
 
         Returns
@@ -412,7 +412,7 @@ class Analysis:
         # Dict to store the results
         p = OrderedDict()
 
-        # Update in ESPResSo core if necessary
+        # Update in espresso core if necessary
         if (analyze.total_pressure.init_status != 1 + v_comp):
             analyze.update_pressure(v_comp)
 
@@ -524,7 +524,7 @@ class Analysis:
         # Dict to store the results
         p = OrderedDict()
 
-        # Update in ESPResSo core if necessary
+        # Update in espresso core if necessary
         if (analyze.total_p_tensor.init_status != 1 + v_comp):
             analyze.update_pressure(v_comp)
 
@@ -883,6 +883,91 @@ class Analysis:
 
         return np.transpose(analyze.modify_stucturefactor(sf_order, sf.data()))
 
+
+    #
+    # Structure factor fast
+    #
+
+    def structure_factor_fast(self, sf_types=None, sf_order=None):
+        """
+        Calculate the structure factor for given types.  Returns the
+        spherically averaged structure factor of particles specified in
+        ``sf_types``.  The structure factor is calculated for all possible wave
+        vectors q up to ``sf_order``. Do not choose parameter ``sf_order`` too
+        large because the number of calculations grows as ``sf_order`` to the
+        third power.
+
+        Parameters
+        ----------
+        sf_types : list of :obj:`int`
+            Specifies which particle :attr:`~espressomd.particle_data.ParticleHandle.type`
+            should be considered.
+        sf_order : :obj:`int`
+            Specifies the maximum wavevector.
+
+        Returns
+        -------
+        :obj:`ndarray`
+            Where [0] contains q
+            and [1] contains the structure factor s(q)
+
+        """
+
+        if (sf_types is None) or (not hasattr(sf_types, '__iter__')):
+            raise ValueError("sf_types has to be a list!")
+        check_type_or_throw_except(
+            sf_order, 1, int, "sf_order has to be an int!")
+
+        p_types = create_int_list_from_python_object(sf_types)
+
+        sf = analyze.calc_structurefactor_fast(analyze.partCfg(), p_types.e,
+                                          p_types.n, sf_order)
+
+        return np.transpose(analyze.modify_stucturefactor_fast(sf_order, sf.data()))
+    
+
+    #
+    # Structure factor uniform
+    #
+
+    def structure_factor_uniform(self, sf_types=None, sf_order=None):
+        """
+        Calculate the structure factor for given types.  Returns the
+        spherically averaged structure factor of particles specified in
+        ``sf_types``.  The structure factor is calculated for all possible wave
+        vectors q up to ``sf_order``. Do not choose parameter ``sf_order`` too
+        large because the number of calculations grows as ``sf_order`` to the
+        third power.
+
+        Parameters
+        ----------
+        sf_types : list of :obj:`int`
+            Specifies which particle :attr:`~espressomd.particle_data.ParticleHandle.type`
+            should be considered.
+        sf_order : :obj:`int`
+            Specifies the maximum wavevector.
+
+        Returns
+        -------
+        :obj:`ndarray`
+            Where [0] contains q
+            and [1] contains the structure factor s(q)
+
+        """
+
+        if (sf_types is None) or (not hasattr(sf_types, '__iter__')):
+            raise ValueError("sf_types has to be a list!")
+        check_type_or_throw_except(
+            sf_order, 1, int, "sf_order has to be an int!")
+
+        p_types = create_int_list_from_python_object(sf_types)
+
+        sf = analyze.calc_structurefactor_uniform(analyze.partCfg(), p_types.e,
+                                          p_types.n, sf_order)
+
+        return np.transpose(analyze.modify_stucturefactor_uniform(sf_order, sf.data()))
+    
+
     #
     # RDF
     #
@@ -995,11 +1080,11 @@ class Analysis:
             Maximum distance.
         r_bins : :obj:`int`
             Number of bins.
-        log_flag : :obj:`bool`
-            When set to ``False``, the bins are linearly equidistant; when set
-            to ``True``, the bins are logarithmically equidistant.
-        int_flag : :obj:`bool`
-            When set to ``True``, the result is an integrated distribution.
+        log_flag : :obj:`int`
+            When set to 0, the bins are linearly equidistant; when set to 1,
+            the bins are logarithmically equidistant.
+        int_flag : :obj:`int`
+            When set to 1, the result is an integrated distribution.
 
         Returns
         -------
@@ -1017,7 +1102,7 @@ class Analysis:
         if r_max is None:
             r_max = min_box_l / 2.0
 
-        if r_min < 0.0 or (log_flag and r_min == 0.0):
+        if r_min < 0.0 or (log_flag == 1 and r_min == 0.0):
             raise ValueError("r_min was chosen too small!")
         if r_max <= r_min:
             raise ValueError("r_max has to be greater than r_min!")
@@ -1033,7 +1118,7 @@ class Analysis:
 
         analyze.calc_part_distribution(
             analyze.partCfg(), p1_types.e, p1_types.n, p2_types.e, p2_types.n,
-            r_min, r_max, r_bins, < bint > log_flag, & low, distribution.data())
+            r_min, r_max, r_bins, log_flag, & low, distribution.data())
 
         np_distribution = create_nparray_from_double_array(
             distribution.data(), r_bins)

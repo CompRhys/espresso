@@ -26,7 +26,6 @@
 
 #include "statistics.hpp"
 
-#include "Particle.hpp"
 #include "bonded_interactions/bonded_interaction_data.hpp"
 #include "communication.hpp"
 #include "energy.hpp"
@@ -37,6 +36,7 @@
 #include "nonbonded_interactions/nonbonded_interaction_data.hpp"
 #include "npt.hpp"
 #include "partCfg_global.hpp"
+#include "particle_data.hpp"
 #include "pressure.hpp"
 #include "short_range_loop.hpp"
 
@@ -48,8 +48,7 @@
 #include <limits>
 
 /** Previous particle configurations (needed for offline analysis and
- *  correlation analysis)
- */
+    correlation analysis) */
 std::vector<std::vector<double>> configs;
 int n_configs = 0;
 int n_part_conf = 0;
@@ -65,7 +64,9 @@ double mindist(PartCfg &partCfg, IntList const &set1, IntList const &set2) {
   auto mindist2 = std::numeric_limits<double>::infinity();
 
   for (auto jt = partCfg.begin(); jt != partCfg.end(); ++jt) {
-    /* check which sets particle j belongs to (bit 0: set1, bit1: set2) */
+    /* check which sets particle j belongs to
+       bit 0: set1, bit1: set2
+    */
     auto in_set = 0;
     if (set1.empty() || contains(set1, jt->p.type))
       in_set = 1;
@@ -210,9 +211,9 @@ double distto(PartCfg &partCfg, const Utils::Vector3d &pos, int pid) {
 
 void calc_part_distribution(PartCfg &partCfg, int const *p1_types, int n_p1,
                             int const *p2_types, int n_p2, double r_min,
-                            double r_max, int r_bins, bool log_flag,
-                            double *low, double *dist) {
-  int ind, cnt = 0;
+                            double r_max, int r_bins, int log_flag, double *low,
+                            double *dist) {
+  int t1, t2, ind, cnt = 0;
   double inv_bin_width = 0.0;
   double min_dist, min_dist2 = 0.0, start_dist2;
 
@@ -222,20 +223,20 @@ void calc_part_distribution(PartCfg &partCfg, int const *p1_types, int n_p1,
   *low = 0.0;
   for (int i = 0; i < r_bins; i++)
     dist[i] = 0.0;
-  if (log_flag)
+  if (log_flag == 1)
     inv_bin_width = (double)r_bins / (log(r_max) - log(r_min));
   else
     inv_bin_width = (double)r_bins / (r_max - r_min);
 
-  /* particle loop: p1_types */
+  /* particle loop: p1_types*/
   for (auto const &p1 : partCfg) {
-    for (int t1 = 0; t1 < n_p1; t1++) {
+    for (t1 = 0; t1 < n_p1; t1++) {
       if (p1.p.type == p1_types[t1]) {
         min_dist2 = start_dist2;
-        /* particle loop: p2_types */
+        /* particle loop: p2_types*/
         for (auto const &p2 : partCfg) {
           if (p1 != p2) {
-            for (int t2 = 0; t2 < n_p2; t2++) {
+            for (t2 = 0; t2 < n_p2; t2++) {
               if (p2.p.type == p2_types[t2]) {
                 auto const act_dist2 =
                     get_mi_vector(p1.r.p, p2.r.p, box_geo).norm2();
@@ -250,7 +251,7 @@ void calc_part_distribution(PartCfg &partCfg, int const *p1_types, int n_p1,
         if (min_dist <= r_max) {
           if (min_dist >= r_min) {
             /* calculate bin index */
-            if (log_flag)
+            if (log_flag == 1)
               ind = (int)((log(min_dist) - log(r_min)) * inv_bin_width);
             else
               ind = (int)((min_dist - r_min) * inv_bin_width);
@@ -285,30 +286,32 @@ void calc_rdf(PartCfg &partCfg, int const *p1_types, int n_p1,
               int const *p2_types, int n_p2, double r_min, double r_max,
               int r_bins, double *rdf) {
   long int cnt = 0;
-  int ind;
+  int i, t1, t2, ind;
   bool mixed_flag = false;
+  double inv_bin_width = 0.0, bin_width = 0.0;
+  double volume, bin_volume, r_in, r_out;
+
   if (n_p1 == n_p2) {
-    for (int i = 0; i < n_p1; i++)
+    for (i = 0; i < n_p1; i++)
       if (p1_types[i] != p2_types[i])
         mixed_flag = true;
-  } else {
+  } else
     mixed_flag = true;
-  }
 
-  auto const bin_width = (r_max - r_min) / (double)r_bins;
-  auto const inv_bin_width = 1.0 / bin_width;
-  for (int i = 0; i < r_bins; i++)
+  bin_width = (r_max - r_min) / (double)r_bins;
+  inv_bin_width = 1.0 / bin_width;
+  for (i = 0; i < r_bins; i++)
     rdf[i] = 0.0;
-  /* particle loop: p1_types */
+  /* particle loop: p1_types*/
   for (auto it = partCfg.begin(); it != partCfg.end(); ++it) {
-    for (int t1 = 0; t1 < n_p1; t1++) {
+    for (t1 = 0; t1 < n_p1; t1++) {
       if (it->p.type == p1_types[t1]) {
         /* distinguish mixed and identical rdf's */
         auto jt = mixed_flag ? partCfg.begin() : std::next(it);
 
-        /* particle loop: p2_types */
+        /* particle loop: p2_types*/
         for (; jt != partCfg.end(); ++jt) {
-          for (int t2 = 0; t2 < n_p2; t2++) {
+          for (t2 = 0; t2 < n_p2; t2++) {
             if (jt->p.type == p2_types[t2]) {
               auto const dist = get_mi_vector(it->r.p, jt->r.p, box_geo).norm();
               if (dist > r_min && dist < r_max) {
@@ -326,12 +329,12 @@ void calc_rdf(PartCfg &partCfg, int const *p1_types, int n_p1,
     return;
 
   /* normalization */
-  auto const volume = box_geo.volume();
-  for (int i = 0; i < r_bins; i++) {
-    auto const r_in = i * bin_width + r_min;
-    auto const r_out = r_in + bin_width;
-    auto const bin_volume = (4.0 / 3.0) * Utils::pi() *
-                            ((r_out * r_out * r_out) - (r_in * r_in * r_in));
+  volume = box_geo.length()[0] * box_geo.length()[1] * box_geo.length()[2];
+  for (i = 0; i < r_bins; i++) {
+    r_in = i * bin_width + r_min;
+    r_out = r_in + bin_width;
+    bin_volume = (4.0 / 3.0) * Utils::pi() *
+                 ((r_out * r_out * r_out) - (r_in * r_in * r_in));
     rdf[i] *= volume / (bin_volume * cnt);
   }
 }
@@ -349,7 +352,11 @@ void calc_rdf_av(PartCfg &partCfg, int const *p1_types, int n_p1,
   long int cnt = 0;
   int cnt_conf = 1;
   bool mixed_flag = false;
-  std::vector<double> rdf_tmp(r_bins);
+  double inv_bin_width = 0.0, bin_width = 0.0;
+  double volume, bin_volume, r_in, r_out;
+  double *rdf_tmp;
+
+  rdf_tmp = (double *)Utils::malloc(r_bins * sizeof(double));
 
   if (n_p1 == n_p2) {
     for (int i = 0; i < n_p1; i++)
@@ -358,9 +365,9 @@ void calc_rdf_av(PartCfg &partCfg, int const *p1_types, int n_p1,
   } else
     mixed_flag = true;
 
-  auto const bin_width = (r_max - r_min) / (double)r_bins;
-  auto const inv_bin_width = 1.0 / bin_width;
-  auto const volume = box_geo.volume();
+  bin_width = (r_max - r_min) / (double)r_bins;
+  inv_bin_width = 1.0 / bin_width;
+  volume = box_geo.length()[0] * box_geo.length()[1] * box_geo.length()[2];
   for (int l = 0; l < r_bins; l++)
     rdf_tmp[l] = rdf[l] = 0.0;
 
@@ -407,10 +414,10 @@ void calc_rdf_av(PartCfg &partCfg, int const *p1_types, int n_p1,
     // normalization
 
     for (int i = 0; i < r_bins; i++) {
-      auto const r_in = i * bin_width + r_min;
-      auto const r_out = r_in + bin_width;
-      auto const bin_volume = (4.0 / 3.0) * Utils::pi() *
-                              ((r_out * r_out * r_out) - (r_in * r_in * r_in));
+      r_in = i * bin_width + r_min;
+      r_out = r_in + bin_width;
+      bin_volume = (4.0 / 3.0) * Utils::pi() *
+                   ((r_out * r_out * r_out) - (r_in * r_in * r_in));
       rdf[i] += rdf_tmp[i] * volume / (bin_volume * cnt);
     }
 
@@ -419,15 +426,19 @@ void calc_rdf_av(PartCfg &partCfg, int const *p1_types, int n_p1,
   for (int i = 0; i < r_bins; i++) {
     rdf[i] /= (cnt_conf - 1);
   }
+  free(rdf_tmp);
 }
 
 std::vector<double> calc_structurefactor(PartCfg &partCfg, int const *p_types,
                                          int n_types, int order) {
-  auto const order2 = order * order;
+  int i, j, k, n, qi, t, order2;
+  double qr, twoPI_L, C_sum, S_sum;
+
+  order2 = order * order;
   std::vector<double> ff;
   ff.resize(2 * order2);
   ff[2 * order2] = 0;
-  auto const twoPI_L = 2 * Utils::pi() / box_geo.length()[0];
+  twoPI_L = 2 * Utils::pi() / box_geo.length()[0];
 
   if ((n_types < 0) || (n_types > max_seen_particle_type)) {
     fprintf(stderr, "WARNING: Wrong number of particle types!");
@@ -439,20 +450,19 @@ std::vector<double> calc_structurefactor(PartCfg &partCfg, int const *p_types,
     fflush(nullptr);
     errexit();
   } else {
-    for (int qi = 0; qi < 2 * order2; qi++) {
+    for (qi = 0; qi < 2 * order2; qi++) {
       ff[qi] = 0.0;
     }
-    for (int i = 0; i <= order; i++) {
-      for (int j = -order; j <= order; j++) {
-        for (int k = -order; k <= order; k++) {
-          auto const n = i * i + j * j + k * k;
+    for (i = 0; i <= order; i++) {
+      for (j = -order; j <= order; j++) {
+        for (k = -order; k <= order; k++) {
+          n = i * i + j * j + k * k;
           if ((n <= order2) && (n >= 1)) {
-            double C_sum = 0.0, S_sum = 0.0;
+            C_sum = S_sum = 0.0;
             for (auto const &p : partCfg) {
-              for (int t = 0; t < n_types; t++) {
+              for (t = 0; t < n_types; t++) {
                 if (p.p.type == p_types[t]) {
-                  auto const qr =
-                      twoPI_L * (Utils::Vector3i{{i, j, k}} * p.r.p);
+                  qr = twoPI_L * (i * p.r.p[0] + j * p.r.p[1] + k * p.r.p[2]);
                   C_sum += cos(qr);
                   S_sum += sin(qr);
                 }
@@ -464,14 +474,14 @@ std::vector<double> calc_structurefactor(PartCfg &partCfg, int const *p_types,
         }
       }
     }
-    int n = 0;
+    n = 0;
     for (auto const &p : partCfg) {
-      for (int t = 0; t < n_types; t++) {
+      for (t = 0; t < n_types; t++) {
         if (p.p.type == p_types[t])
           n++;
       }
     }
-    for (int qi = 0; qi < order2; qi++)
+    for (qi = 0; qi < order2; qi++)
       if (ff[2 * qi + 1] != 0)
         ff[2 * qi] /= n * ff[2 * qi + 1];
   }
@@ -488,7 +498,201 @@ std::vector<std::vector<double>> modify_stucturefactor(int order,
     }
   }
 
-  auto const qfak = 2.0 * Utils::pi() / box_geo.length()[0];
+  double qfak = 2.0 * Utils::pi() / box_geo.length()[0];
+  std::vector<double> intern;
+  intern.assign(2, 0.0);
+  std::vector<std::vector<double>> structure_factor;
+  structure_factor.assign(length, intern);
+
+  int cnt = 0;
+  for (int i = 0; i < order * order; i++) {
+    if (sf[2 * i + 1] > 0) {
+      structure_factor[cnt][0] = qfak * sqrt(i + 1);
+      structure_factor[cnt][1] = sf[2 * i];
+      cnt++;
+    }
+  }
+
+  return structure_factor;
+}
+
+
+std::vector<double> calc_structurefactor_fast(PartCfg &partCfg, int const *p_types,
+                                         int n_types, int order) {
+  int i, j, k, n, qi, t, order2;
+  double qr, twoPI_L, C_sum, S_sum;
+
+  order2 = order * order;
+  std::vector<double> ff;
+  ff.resize(2 * order2);
+  ff[2 * order2] = 0;
+  twoPI_L = 2 * Utils::pi() / box_geo.length()[0];
+  
+  if ((n_types < 0) || (n_types > max_seen_particle_type)) {
+    fprintf(stderr, "WARNING: Wrong number of particle types!");
+    fflush(nullptr);
+    errexit();
+  } else if (order < 1) {
+    fprintf(stderr,
+            "WARNING: parameter \"order\" has to be a whole positive number");
+    fflush(nullptr);
+    errexit();
+  } else {
+    for (qi = 0; qi < 2 * order2; qi++) {
+      ff[qi] = 0.0;
+    }
+    for (i = -order; i <= order; i++) {
+      for (j = 0; j <= 2; j++) {
+        n = i * i;
+        if ((n <= order2) && (n >= 1)) {
+          C_sum = 0.0;
+          S_sum = 0.0;
+          for (auto const &p : partCfg) {
+            for (t = 0; t < n_types; t++) {
+              if (p.p.type == p_types[t]) {
+                qr = twoPI_L * i * p.r.p[j];
+                C_sum += cos(qr);
+                S_sum += sin(qr);
+              }
+            }
+          }
+          ff[2 * n - 2] += C_sum * C_sum + S_sum * S_sum;
+          ff[2 * n - 1]++;
+        }
+      }
+    }
+    n = 0;
+    for (auto const &p : partCfg) {
+      for (t = 0; t < n_types; t++) {
+        if (p.p.type == p_types[t])
+          n++;
+      }
+    }
+    for (qi = 0; qi < order2; qi++)
+      if (ff[2 * qi + 1] != 0)
+        ff[2 * qi] /= n * ff[2 * qi + 1];
+  }
+
+  return ff;
+}
+
+std::vector<std::vector<double>> modify_stucturefactor_fast(int order,
+                                                       double const *sf) {
+  int length = 0;
+
+  for (int i = 0; i < order * order; i++) {
+    if (sf[2 * i + 1] > 0) {
+      length++;
+    }
+  }
+
+  double qfak = 2.0 * Utils::pi() / box_geo.length()[0];
+  std::vector<double> intern;
+  intern.assign(2, 0.0);
+  std::vector<std::vector<double>> structure_factor;
+  structure_factor.assign(length, intern);
+
+  int cnt = 0;
+  for (int i = 0; i < order * order; i++) {
+    if (sf[2 * i + 1] > 0) {
+      structure_factor[cnt][0] = qfak * sqrt(i + 1);
+      structure_factor[cnt][1] = sf[2 * i];
+      cnt++;
+    }
+  }
+
+  return structure_factor;
+}
+
+
+std::vector<double> calc_structurefactor_uniform(PartCfg &partCfg, int const *p_types,
+                                         int n_types, int order) {
+  int i, j, k, n, qi, t, order2;
+  double qr, twoPI_L, C_sum, S_sum;
+
+  order2 = order * order;
+  std::vector<double> ff;
+  ff.resize(2 * order2);
+  ff[2 * order2] = 0;
+  twoPI_L = 2 * Utils::pi() / box_geo.length()[0];
+
+  if ((n_types < 0) || (n_types > max_seen_particle_type)) {
+    fprintf(stderr, "WARNING: Wrong number of particle types!");
+    fflush(nullptr);
+    errexit();
+  } else if (order < 1) {
+    fprintf(stderr,
+            "WARNING: parameter \"order\" has to be a whole positive number");
+    fflush(nullptr);
+    errexit();
+  } else {
+    for (qi = 0; qi < 2 * order2; qi++) {
+      ff[qi] = 0.0;
+    }
+    // we still need to evaluate over the n^3 combinations of [ijk]
+
+    // TODO:
+    // A faster method may still be possible if we can find ijk directly
+    // d = m^2 + n^2 + p^2 + q^2
+    // (m + n + p + q) % 2 = 1
+    // gcd(m,n,p,q) = 1
+    // then 
+    // a = m^2 + n^2 - p^2 - q^2
+    // b = 2(mq+np)
+    // c = 2(nq-mp)
+    // then
+    // a^2 + b^2 + c^2 - d^2 = 0
+
+    for (i = 0; i <= order; i++) {
+      for (j = 0; j <= order; j++) {
+        for (k = 0; k <= order; k++) {
+          n = i * i + j * j + k * k;
+          double d_sqrt = sqrt(n);
+          int i_sqrt = d_sqrt;
+          if ((n <= order2) && (n >= 1) && (d_sqrt == i_sqrt)) {
+            C_sum = S_sum = 0.0;
+            for (auto const &p : partCfg) {
+              for (t = 0; t < n_types; t++) {
+                if (p.p.type == p_types[t]) {
+                  qr = twoPI_L * (i * p.r.p[0] + j * p.r.p[1] + k * p.r.p[2]);
+                  C_sum += cos(qr);
+                  S_sum += sin(qr);
+                }
+              }
+            }
+            ff[2 * n - 2] += C_sum * C_sum + S_sum * S_sum;
+            ff[2 * n - 1]++;
+          }
+        }
+      }
+    }
+    n = 0;
+    for (auto const &p : partCfg) {
+      for (t = 0; t < n_types; t++) {
+        if (p.p.type == p_types[t])
+          n++;
+      }
+    }
+    for (qi = 0; qi < order2; qi++){
+      if (ff[2 * qi + 1] != 0){
+        ff[2 * qi] /= n * ff[2 * qi + 1];
+      }
+    }
+  }
+  return ff;
+}
+
+std::vector<std::vector<double>> modify_stucturefactor_uniform(int order,
+                                                       double const *sf) {
+  int length = 0;
+
+  for (int i = 0; i < order * order; i++) {
+    if (sf[2 * i + 1] > 0) {
+      length++;
+    }
+  }
+
+  double qfak = 2.0 * Utils::pi() / box_geo.length()[0];
   std::vector<double> intern;
   intern.assign(2, 0.0);
   std::vector<std::vector<double>> structure_factor;
@@ -590,7 +794,7 @@ int calc_cylindrical_average(
   }
 
   // Now we turn the counts into densities by dividing by one radial
-  // bin (binvolume). We also divide the velocities by the counts.
+  // bin (binvolume).  We also divide the velocities by the counts.
   double binvolume;
   for (unsigned int type_id = 0; type_id < types.size(); type_id++) {
     for (int index_radial = 0; index_radial < bins_radial; index_radial++) {
@@ -636,10 +840,11 @@ void analyze_append(PartCfg &partCfg) {
 }
 
 void analyze_configs(double const *tmp_config, int count) {
+  int i;
   n_part_conf = count;
   configs.resize(n_configs + 1);
   configs[n_configs].resize(3 * n_part_conf);
-  for (int i = 0; i < n_part_conf; i++) {
+  for (i = 0; i < n_part_conf; i++) {
     configs[n_configs][3 * i] = tmp_config[3 * i];
     configs[n_configs][3 * i + 1] = tmp_config[3 * i + 1];
     configs[n_configs][3 * i + 2] = tmp_config[3 * i + 2];
@@ -686,7 +891,7 @@ void obsstat_realloc_and_clear(Observable_stat *stat, int n_pre, int n_bonded,
 
 void obsstat_realloc_and_clear_non_bonded(Observable_stat_non_bonded *stat_nb,
                                           int n_nonbonded, int c_size) {
-  auto const total = c_size * (n_nonbonded + n_nonbonded);
+  int i, total = c_size * (n_nonbonded + n_nonbonded);
 
   stat_nb->data_nb.resize(total);
   stat_nb->chunk_size_nb = c_size;
@@ -694,7 +899,7 @@ void obsstat_realloc_and_clear_non_bonded(Observable_stat_non_bonded *stat_nb,
   stat_nb->non_bonded_intra = stat_nb->data_nb.e;
   stat_nb->non_bonded_inter = stat_nb->non_bonded_intra + c_size * n_nonbonded;
 
-  for (int i = 0; i < total; i++)
+  for (i = 0; i < total; i++)
     stat_nb->data_nb[i] = 0.0;
 }
 
@@ -705,6 +910,7 @@ void invalidate_obs() {
 }
 
 void update_pressure(int v_comp) {
+  int i;
   double p_vel[3];
   /* if desired (v_comp==1) replace ideal component with instantaneous one */
   if (total_pressure.init_status != 1 + v_comp) {
@@ -721,7 +927,7 @@ void update_pressure(int v_comp) {
       total_pressure.data.e[0] = 0.0;
       MPI_Reduce(nptiso.p_vel, p_vel, 3, MPI_DOUBLE, MPI_SUM, 0,
                  MPI_COMM_WORLD);
-      for (int i = 0; i < 3; i++)
+      for (i = 0; i < 3; i++)
         if (nptiso.geometry & nptiso.nptgeom_dir[i])
           total_pressure.data.e[0] += p_vel[i];
       total_pressure.data.e[0] /= (nptiso.dimension * nptiso.volume);
